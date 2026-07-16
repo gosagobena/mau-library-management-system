@@ -243,3 +243,5 @@ This project is licensed under the [MIT License](LICENSE).
 ## Acknowledgments
 
 Developed for the **Mattu University Main Campus Library and Information Center**, as part of an effort to modernize library operations through a secure, scalable, and maintainable digital solution.
+#   m a u - l i b r a r y - m a n a g e m e n t - s y s t e m  
+ 
