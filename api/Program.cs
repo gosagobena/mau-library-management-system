@@ -22,8 +22,11 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddHostedService<OverdueBackgroundService>();
 
 // ── Authentication: JWT Bearer (Section 3.7) ─────────────
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key must be configured (see .env.example).");
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    jwtKey = "local-development-only-key-not-for-production-use-1234";
+}
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
