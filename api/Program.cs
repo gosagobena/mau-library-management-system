@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -108,6 +109,8 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+await EnsureDatabaseAndRoleAsync(builder.Configuration);
+
 // ── Migrate + seed on startup ────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
@@ -138,3 +141,73 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+static async Task EnsureDatabaseAndRoleAsync(IConfiguration configuration)
+{
+    var connectionString = configuration.GetConnectionString("Default");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return;
+    }
+
+    var builder = new NpgsqlConnectionStringBuilder(connectionString);
+    var adminUser = configuration["ConnectionStrings:AdminUser"] ?? "postgres";
+    var adminPassword = configuration["ConnectionStrings:AdminPassword"] ?? string.Empty;
+
+    try
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        return;
+    }
+    catch (NpgsqlException)
+    {
+        // Fall back to creating the current role and database if they are missing.
+    }
+
+    var adminConnectionString = new NpgsqlConnectionStringBuilder
+    {
+        Host = builder.Host,
+        Port = builder.Port,
+        Database = "postgres",
+        Username = adminUser,
+        Password = adminPassword,
+        SslMode = builder.SslMode,
+        TrustServerCertificate = builder.TrustServerCertificate
+    }.ConnectionString;
+
+    await using (var adminConnection = new NpgsqlConnection(adminConnectionString))
+    {
+        await adminConnection.OpenAsync();
+
+        await using var roleCheck = adminConnection.CreateCommand();
+        roleCheck.CommandText = "SELECT 1 FROM pg_roles WHERE rolname = @role";
+        roleCheck.Parameters.AddWithValue("role", builder.Username);
+        var roleExists = await roleCheck.ExecuteScalarAsync() is not null;
+
+        if (!roleExists)
+        {
+            var escapedPassword = builder.Password.Replace("'", "''");
+            await using var createRole = adminConnection.CreateCommand();
+            createRole.CommandText = "CREATE ROLE " + QuoteIdentifier(builder.Username) + " LOGIN PASSWORD '" + escapedPassword + "'";
+            await createRole.ExecuteNonQueryAsync();
+        }
+
+        await using var databaseCheck = adminConnection.CreateCommand();
+        databaseCheck.CommandText = "SELECT 1 FROM pg_database WHERE datname = @database";
+        databaseCheck.Parameters.AddWithValue("database", builder.Database);
+        var databaseExists = await databaseCheck.ExecuteScalarAsync() is not null;
+
+        if (!databaseExists)
+        {
+            await using var createDatabase = adminConnection.CreateCommand();
+            createDatabase.CommandText = $"CREATE DATABASE {QuoteIdentifier(builder.Database)} OWNER {QuoteIdentifier(builder.Username)}";
+            await createDatabase.ExecuteNonQueryAsync();
+        }
+    }
+}
+
+static string QuoteIdentifier(string identifier)
+{
+    return $"\"{identifier.Replace("\"", "\"\"")}\"";
+}
