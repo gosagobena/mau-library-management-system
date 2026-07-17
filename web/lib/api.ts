@@ -1,6 +1,7 @@
 // Typed API client — every request/response shape is checked at compile time (Section 5.1.1).
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
 // ── Types (mirror the API DTOs) ──────────────────────────
 
@@ -165,8 +166,61 @@ export function getBook(id: string) {
   return request<Book>(`/books/${id}`);
 }
 
+export function createBook(data: {
+  title: string;
+  isbn: string;
+  authorId: string;
+  categoryId: string;
+  copiesTotal: number;
+}) {
+  return request<Book>("/books", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateBook(
+  id: string,
+  data: {
+    title: string;
+    isbn: string;
+    authorId: string;
+    categoryId: string;
+    copiesTotal: number;
+    copiesAvailable: number;
+    outOfCirculation: boolean;
+  },
+) {
+  return request<Book>(`/books/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteBook(id: string) {
+  return request<void>(`/books/${id}`, { method: "DELETE" });
+}
+
+export function getAuthors() {
+  return request<any[]>("/authors");
+}
+
+export function createAuthor(data: { name: string; biography?: string }) {
+  return request<any>("/authors", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
 export function getCategories() {
   return request<Category[]>("/categories");
+}
+
+export function createCategory(data: { name: string }) {
+  return request<Category>("/categories", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 // ── Circulation ──────────────────────────────────────────
